@@ -1,9 +1,10 @@
 var AWS = require('aws-sdk');
 var url = require('url');
-var region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
-var sns = new AWS.SNS({ region: region });
-var s3 = new AWS.S3({ region: region });
-
+var region = process.env.AWS_DEFAULT_REGION || 'ap-southeast-1';
+// var sns = new AWS.SNS({ region: region , credentials: new AWS.SharedIniFileCredentials({profile: 'iflix-prod'}) });
+// var s3 = new AWS.S3({ region: region , credentials: new AWS.SharedIniFileCredentials({profile: 'iflixaws'})  });
+var sns = new AWS.SNS({ region: region })
+var s3 = new AWS.S3({ region: region })
 module.exports = {};
 module.exports.usage = usage;
 module.exports.touch = touch;
@@ -14,11 +15,17 @@ function usage() {
     return 'Usage: s3touch <s3 path> [--topic <ARN string>] [--requesterpays]';
 }
 
+function isFile(pathname) {
+    return pathname
+        .split('/').pop()
+        .split('.').length > 1;
+}
+
 function touch(s3path, cache, topic, requesterPays, callback) {
     var uri = url.parse(s3path);
     var bucket = uri.hostname;
-    var objkey = (uri.pathname||'').substr(1);
-
+    var objkey = decodeURIComponent((uri.pathname||'').substr(1));
+    if(!isFile(s3path)){ callback(null,true) ;}
     if (uri.protocol !== 's3:' || !bucket || !objkey) return callback(new Error('Invalid S3 path "' + s3path + '"'));
 
     createMessage(bucket, objkey, requesterPays, function(err, message) {
@@ -41,7 +48,6 @@ function touch(s3path, cache, topic, requesterPays, callback) {
 function createMessage(bucket, objkey, requesterPays, callback) {
     var params = { Bucket: bucket, Key: objkey }
     if (requesterPays) params.RequestPayer = 'requester';
-
     s3.headObject(params, function(err, data) {
         if (err) return callback(new Error('Could not HEAD object ("'+(err.message||err.statusCode)+'")'));
         var size = parseInt(data.ContentLength, 10);
@@ -74,9 +80,13 @@ function createMessage(bucket, objkey, requesterPays, callback) {
 }
 
 function publishEvent(topic, message, callback) {
+  //console.log({ TopicArn: topic, Message: JSON.stringify(message) });
     sns.publish({ TopicArn: topic, Message: JSON.stringify(message) }, function(err, data) {
+      console.log('event published',err,data);
         if (err) return callback(new Error('Could not send SNS message ("' + (err.message||err.statusCode) + '")'));
-        return callback(null, data);
+        return setTimeout(function (){
+            callback(null, data)
+        },50);
     });
 }
 
@@ -85,7 +95,7 @@ function list(s3path, callback) {
     var bucket = uri.hostname;
     var prefix = (uri.pathname||'').substr(1);
 
-    if (uri.protocol !== 's3:' || !bucket || !prefix) return callback(new Error('Invalid S3 path "' + s3path + '"'));
+    if (uri.protocol !== 's3:' || !bucket) return callback(new Error('Invalid S3 path "' + s3path + '"'));
 
     var marker = null;
     var result = [];
@@ -100,7 +110,7 @@ function list(s3path, callback) {
             while (i--) result.unshift('s3://' + bucket + '/' + data.Contents[i].Key);
             if (data.IsTruncated) {
                 marker = data.Contents.pop().Key;
-                list();
+                setTimeout(list,0)
             } else {
                 callback(null, result);
             }
@@ -108,4 +118,3 @@ function list(s3path, callback) {
     }
     list();
 }
-

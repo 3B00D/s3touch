@@ -8,7 +8,7 @@ var s3paths = argv._;
 var cache = {};
 var topic = null;
 var requesterPays = false;
-
+var processed_count = 0;
 if (s3paths.length < 1) {
     console.log(s3touch.usage());
     process.exit(1);
@@ -24,12 +24,18 @@ function run(err, data) {
         process.exit(1);
     }
     if (data) {
-        console.log('ok - ' + s3paths[0]);
+        console.log('ok - ' + s3paths[0],'removing the prev item');
         s3paths.shift();
     }
-    if (s3paths.length) {
-        s3touch.touch(s3paths[0], cache, topic, requesterPays, run);
-    }
+    setTimeout(function (){
+        if (s3paths.length > 0) {
+            processed_count += 1;
+            s3touch.touch(s3paths[0], cache, topic, requesterPays, run);
+        }
+        else{
+            console.log('done : processed files : ',processed_count)
+        }
+    },0)
 }
 
 if (argv.topic) topic = argv.topic;
@@ -47,4 +53,3 @@ if (argv.recursive) {
 } else {
     run();
 }
-
