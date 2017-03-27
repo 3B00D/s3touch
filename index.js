@@ -25,7 +25,7 @@ function touch(s3path, cache, topic, requesterPays, callback) {
     var uri = url.parse(s3path);
     var bucket = uri.hostname;
     var objkey = decodeURIComponent((uri.pathname||'').substr(1));
-    if(!isFile(s3path)){ callback(null,true) ;}
+    // if(!isFile(s3path)){ callback(null,true) ;}
     if (uri.protocol !== 's3:' || !bucket || !objkey) return callback(new Error('Invalid S3 path "' + s3path + '"'));
 
     createMessage(bucket, objkey, requesterPays, function(err, message) {
@@ -49,6 +49,7 @@ function createMessage(bucket, objkey, requesterPays, callback) {
     var params = { Bucket: bucket, Key: objkey }
     if (requesterPays) params.RequestPayer = 'requester';
     s3.headObject(params, function(err, data) {
+        console.log(err)
         if (err) return callback(new Error('Could not HEAD object ("'+(err.message||err.statusCode)+'")'));
         var size = parseInt(data.ContentLength, 10);
         var etag = JSON.parse(data.ETag);
@@ -93,7 +94,7 @@ function publishEvent(topic, message, callback) {
 function list(s3path, callback) {
     var uri = url.parse(s3path);
     var bucket = uri.hostname;
-    var prefix = (uri.pathname||'').substr(1);
+    var prefix = decodeURIComponent(uri.pathname||'').substr(1);
 
     if (uri.protocol !== 's3:' || !bucket) return callback(new Error('Invalid S3 path "' + s3path + '"'));
 
